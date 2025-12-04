@@ -62,11 +62,13 @@ if st.button("Gerar Dados"):
         df_final = df_final.merge(disp_count, on="Driver ID", how="left")
         df_final = df_final.merge(disp_extra, on="Driver ID", how="left")
 
-        # Tratativa: se Driver Name estiver vazio, buscar pelo Driver ID na disponibilidade
+        # 🔹 Adicionar Vehicle Type
         df_final = df_final.merge(
-            df_disp[["Driver ID", "Driver Name"]].drop_duplicates(),
+            df_disp[["Driver ID", "Driver Name", "Vehicle Type"]].drop_duplicates(),
             on="Driver ID", how="left", suffixes=("", "_disp")
         )
+
+        # Tratativa: se Driver Name estiver vazio, buscar pelo Driver ID na disponibilidade
         df_final["Driver Name"] = df_final["Driver Name"].fillna(df_final["Driver Name_disp"])
         df_final = df_final.drop(columns=["Driver Name_disp"])
 
@@ -78,21 +80,32 @@ if st.button("Gerar Dados"):
         df_final["Total Disponibilidade"] = df_final["Total Disponibilidade"].fillna(0).astype(int)
 
         # 🔹 Calcular Taxa de Aproveitamento
-        df_final["Taxa de Aproveitamento"] = df_final.apply(
+        df_final["Taxa de Aproveitamento (%)"] = df_final.apply(
             lambda row: (row["Vezes que Carregou"] / row["Total Disponibilidade"] * 100)
             if row["Total Disponibilidade"] > 0 else 0,
             axis=1
-        ).round(2).astype(str) + "%"
+        ).round(2)
 
         # Formatando DS
         df_final["Driver ID"] = pd.to_numeric(df_final["Driver ID"], errors="coerce").fillna(0).astype(int)
-        df_final["DS"] = (df_final["DS"] * 100).round(2).astype(str) + "%"
+        df_final["DS (%)"] = (df_final["DS"] * 100).round(2)
 
-        # Mostrar resultado na tela
-        st.dataframe(df_final)
+        # 🔹 Função para colorir células
+        def color_percent(val):
+            try:
+                if val >= 98:
+                    return "color: green; font-weight: bold;"
+                else:
+                    return "color: red; font-weight: bold;"
+            except:
+                return ""
+
+        # Aplicar estilo
+        styled_df = df_final.style.applymap(color_percent, subset=["Taxa de Aproveitamento (%)", "DS (%)"])
+
+        # Mostrar resultado com altura maior
+        st.dataframe(styled_df, height=600, width=1200)
 
         # Download do consolidado
         csv = df_final.to_csv(index=False).encode("utf-8")
         st.download_button("📥 Baixar Dados", data=csv, file_name="resultado.csv", mime="text/csv")
-    else:
-        st.warning("⚠️ Por favor, envie todos os arquivos antes de gerar o consolidado.")
