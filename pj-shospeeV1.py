@@ -114,7 +114,8 @@ styled_df = (
 st.dataframe(styled_df, height=600, width=1200)
 
 
-        # Download do consolidado
-        csv = df_final.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Baixar Dados", data=csv, file_name="resultado.csv", mime="text/csv")
+# Download do consolidado
+csv = df_final.to_csv(index=False).encode("utf-8")
+st.download_button("📥 Baixar Dados", data=csv, file_name="resultado.csv", mime="text/csv")
+
 
