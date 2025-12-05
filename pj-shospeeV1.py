@@ -53,7 +53,7 @@ if st.button("Gerar Dados"):
         disp_extra["Total Disponibilidade"] = disp_extra["Disponibilidade AM"] + disp_extra["Disponibilidade SD"]
 
         # Performance
-        df_perf = df_perf[["Driver ID", "Driver Name"]]
+        df_perf = df_perf[["Driver ID", "Driver Name", "DS"]]
 
         # Consolidar
         df_final = df_perf.merge(carregou_count, on="Driver ID", how="left")
