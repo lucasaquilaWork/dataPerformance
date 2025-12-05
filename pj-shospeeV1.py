@@ -46,11 +46,11 @@ if st.button("Gerar Dados"):
             return pd.Series([am_count, sd_count])
 
         # Aplicar por motorista
-        df_disp[["Disponibilidade AM", "Disponibilidade SD"]] = df_disp.apply(contar_disponibilidade, axis=1)
+        df_disp[["AM", "SD"]] = df_disp.apply(contar_disponibilidade, axis=1)
 
         # Agregar AM e SD por Driver ID
-        disp_extra = df_disp.groupby("Driver ID")[["Disponibilidade AM", "Disponibilidade SD"]].sum().reset_index()
-        disp_extra["Total Disponibilidade"] = disp_extra["Disponibilidade AM"] + disp_extra["Disponibilidade SD"]
+        disp_extra = df_disp.groupby("Driver ID")[["AM", "SD"]].sum().reset_index()
+        disp_extra["Total Disponibilidade"] = disp_extra["AM"] + disp_extra["SD"]
 
         # Performance
         df_perf = df_perf[["Driver ID", "Driver Name", "DS"]]
@@ -71,7 +71,7 @@ if st.button("Gerar Dados"):
         df_final = df_final.drop(columns=["Driver Name_disp"])
 
         # Preencher valores ausentes
-        for col in ["Vezes que Carregou", "No-Show", "Disponibilidade AM", "Disponibilidade SD", "Total Disponibilidade"]:
+        for col in ["Vezes que Carregou", "No-Show", "AM", "SD", "Total Disponibilidade"]:
             df_final[col] = df_final[col].fillna(0).astype(int)
 
         # 🔹 Calcular Taxa de Aproveitamento
