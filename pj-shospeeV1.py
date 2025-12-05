@@ -50,8 +50,6 @@ if st.button("Gerar Dados"):
 
         # Agregar AM e SD por Driver ID
         disp_extra = df_disp.groupby("Driver ID")[["Disponibilidade AM", "Disponibilidade SD"]].sum().reset_index()
-
-        # 🔹 Criar coluna Total Disponibilidade
         disp_extra["Total Disponibilidade"] = disp_extra["Disponibilidade AM"] + disp_extra["Disponibilidade SD"]
 
         # Performance
@@ -73,11 +71,8 @@ if st.button("Gerar Dados"):
         df_final = df_final.drop(columns=["Driver Name_disp"])
 
         # Preencher valores ausentes
-        df_final["Vezes que Carregou"] = df_final["Vezes que Carregou"].fillna(0).astype(int)
-        df_final["No-Show"] = df_final["No-Show"].fillna(0).astype(int)
-        df_final["Disponibilidade AM"] = df_final["Disponibilidade AM"].fillna(0).astype(int)
-        df_final["Disponibilidade SD"] = df_final["Disponibilidade SD"].fillna(0).astype(int)
-        df_final["Total Disponibilidade"] = df_final["Total Disponibilidade"].fillna(0).astype(int)
+        for col in ["Vezes que Carregou", "No-Show", "Disponibilidade AM", "Disponibilidade SD", "Total Disponibilidade"]:
+            df_final[col] = df_final[col].fillna(0).astype(int)
 
         # 🔹 Calcular Taxa de Aproveitamento
         df_final["Taxa de Aproveitamento (%)"] = df_final.apply(
@@ -113,9 +108,6 @@ if st.button("Gerar Dados"):
         # Mostrar resultado com altura maior
         st.dataframe(styled_df, height=600, width=1200)
 
-
-# Download do consolidado
-csv = df_final.to_csv(index=False).encode("utf-8")
-st.download_button("📥 Baixar Dados", data=csv, file_name="resultado.csv", mime="text/csv")
-
-
+        # 🔹 Download do consolidado (agora dentro do botão)
+        csv = df_final.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Baixar Dados", data=csv, file_name="resultado.csv", mime="text/csv")
