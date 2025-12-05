@@ -79,39 +79,39 @@ if st.button("Gerar Dados"):
         df_final["Disponibilidade SD"] = df_final["Disponibilidade SD"].fillna(0).astype(int)
         df_final["Total Disponibilidade"] = df_final["Total Disponibilidade"].fillna(0).astype(int)
 
-# 🔹 Calcular Taxa de Aproveitamento
-df_final["Taxa de Aproveitamento (%)"] = df_final.apply(
-    lambda row: (row["Vezes que Carregou"] / row["Total Disponibilidade"] * 100)
-    if row["Total Disponibilidade"] > 0 else 0,
-    axis=1
-)
+        # 🔹 Calcular Taxa de Aproveitamento
+        df_final["Taxa de Aproveitamento (%)"] = df_final.apply(
+            lambda row: (row["Vezes que Carregou"] / row["Total Disponibilidade"] * 100)
+            if row["Total Disponibilidade"] > 0 else 0,
+            axis=1
+        )
 
-# Formatando DS
-df_final["Driver ID"] = pd.to_numeric(df_final["Driver ID"], errors="coerce").fillna(0).astype(int)
-df_final["DS (%)"] = df_final["DS"] * 100
+        # Formatando DS
+        df_final["Driver ID"] = pd.to_numeric(df_final["Driver ID"], errors="coerce").fillna(0).astype(int)
+        df_final["DS (%)"] = df_final["DS"] * 100
 
-# 🔹 Função para colorir células
-def color_percent(val):
-    try:
-        if val >= 98:
-            return "color: green; font-weight: bold;"
-        else:
-            return "color: red; font-weight: bold;"
-    except:
-        return ""
+        # 🔹 Função para colorir células
+        def color_percent(val):
+            try:
+                if val >= 98:
+                    return "color: green; font-weight: bold;"
+                else:
+                    return "color: red; font-weight: bold;"
+            except:
+                return ""
 
-# 🔹 Aplicar estilo e formatar com 2 casas decimais
-styled_df = (
-    df_final.style
-    .applymap(color_percent, subset=["Taxa de Aproveitamento (%)", "DS (%)"])
-    .format({
-        "Taxa de Aproveitamento (%)": "{:.2f}%",
-        "DS (%)": "{:.2f}%"
-    })
-)
+        # 🔹 Aplicar estilo e formatar com 2 casas decimais
+        styled_df = (
+            df_final.style
+            .applymap(color_percent, subset=["Taxa de Aproveitamento (%)", "DS (%)"])
+            .format({
+                "Taxa de Aproveitamento (%)": "{:.2f}%",
+                "DS (%)": "{:.2f}%"
+            })
+        )
 
-# Mostrar resultado com altura maior
-st.dataframe(styled_df, height=600, width=1200)
+        # Mostrar resultado com altura maior
+        st.dataframe(styled_df, height=600, width=1200)
 
 
 # Download do consolidado
