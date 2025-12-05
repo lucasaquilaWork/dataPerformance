@@ -104,6 +104,8 @@ if st.button("Gerar Dados"):
             .format({
                 "Taxa de Aproveitamento (%)": "{:.2f}%",
                 "DS (%)": "{:.2f}%"
+                "DS": "{:.2f}%"
+
             })
         )
 
