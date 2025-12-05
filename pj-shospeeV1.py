@@ -108,7 +108,7 @@ if st.button("Gerar Dados"):
         )
 
         # Mostrar resultado com altura maior
-        st.dataframe(styled_df, height=600, width=1200)
+        st.dataframe(styled_df, height=600, width=1600)
 
         # 🔹 Download do consolidado (agora dentro do botão)
         csv = df_final.to_csv(index=False).encode("utf-8")
