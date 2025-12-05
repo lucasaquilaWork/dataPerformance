@@ -84,6 +84,8 @@ if st.button("Gerar Dados"):
         # Formatando DS
         df_final["Driver ID"] = pd.to_numeric(df_final["Driver ID"], errors="coerce").fillna(0).astype(int)
         df_final["DS (%)"] = df_final["DS"] * 100
+        df_final["DS"] = df_final["DS"] * 100
+
 
         # 🔹 Função para colorir células
         def color_percent(val):
