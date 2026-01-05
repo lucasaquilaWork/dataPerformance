@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 
 st.set_page_config(layout="wide")
 st.title("📊 Consolidador de Performance de Motoristas")
@@ -25,43 +26,54 @@ if st.button("🚀 Gerar Dados"):
     # =====================================================
     # LEITURA DOS ARQUIVOS
     # =====================================================
-    df_carregou = pd.concat(
-        [pd.read_csv(f) for f in carregamento_files], ignore_index=True
-    )
-    df_disp = pd.concat(
-        [pd.read_excel(f) for f in disponibilidade_files], ignore_index=True
-    )
-    df_perf = pd.concat(
-        [pd.read_excel(f) for f in performance_files], ignore_index=True
-    )
+    try:
+        df_carregou = pd.concat(
+            [pd.read_csv(f) for f in carregamento_files],
+            ignore_index=True
+        )
+
+        df_disp = pd.concat(
+            [pd.read_excel(f) for f in disponibilidade_files],
+            ignore_index=True
+        )
+
+        df_perf = pd.concat(
+            [pd.read_excel(f) for f in performance_files],
+            ignore_index=True
+        )
+    except ImportError:
+        st.error(
+            "❌ Dependência ausente: openpyxl\n\n"
+            "Instale com:\n"
+            "`pip install openpyxl`"
+        )
+        st.stop()
 
     # =====================================================
-    # PADRONIZAÇÃO DE COLUNAS
+    # PADRONIZAÇÃO
     # =====================================================
     for df in [df_carregou, df_disp, df_perf]:
         df.columns = df.columns.str.strip()
 
-    # Performance (vem em maiúsculo)
     df_perf = df_perf.rename(columns={
         "DRIVER ID": "Driver ID",
         "DRIVER NAME": "Driver Name"
     })
 
-    required_perf = ["Driver ID", "Driver Name", "DS"]
-    missing = [c for c in required_perf if c not in df_perf.columns]
+    required = ["Driver ID", "Driver Name", "DS"]
+    missing = [c for c in required if c not in df_perf.columns]
     if missing:
-        st.error(f"❌ Colunas ausentes no arquivo de Performance: {missing}")
+        st.error(f"❌ Colunas ausentes no Performance: {missing}")
         st.stop()
 
-    df_perf = df_perf[required_perf]
+    df_perf = df_perf[required]
 
     # =====================================================
     # CARREGAMENTO
     # =====================================================
-    df_carregou = df_carregou.drop_duplicates(subset=["Task ID"])
-
     carregou_count = (
         df_carregou
+        .drop_duplicates(subset=["Task ID"])
         .groupby("Driver ID", as_index=False)
         .size()
         .rename(columns={"size": "Vezes que Carregou"})
@@ -80,25 +92,43 @@ if st.button("🚀 Gerar Dados"):
     fixed_cols = ["Driver ID", "Driver Name", "No Show Time", "Vehicle Type"]
     date_cols = [c for c in df_disp.columns if c not in fixed_cols]
 
-    # Contagem AM e SD (otimizada)
+    # -------- FUNÇÃO AUTOMÁTICA DE TURNO --------
+    def classify_shift(val):
+        if pd.isna(val):
+            return None
+
+        val = str(val).strip()
+        if val in ["", "--", "Not Available"]:
+            return None
+
+        match = re.search(r"(\d{1,2}):(\d{2})", val)
+        if not match:
+            return None
+
+        hour = int(match.group(1))
+        return "AM" if hour < 12 else "SD"
+
+    # -------- CONTAGEM AUTOMÁTICA --------
     df_disp["AM"] = df_disp[date_cols].apply(
-        lambda x: x.astype(str).str.contains("05:45-09:30", regex=False).sum(), axis=1
+        lambda row: sum(classify_shift(v) == "AM" for v in row),
+        axis=1
     )
 
     df_disp["SD"] = df_disp[date_cols].apply(
-        lambda x: x.astype(str).str.contains("12:30-15:00", regex=False).sum(), axis=1
+        lambda row: sum(classify_shift(v) == "SD" for v in row),
+        axis=1
     )
+
+    df_disp["Total Disponibilidade"] = df_disp["AM"] + df_disp["SD"]
 
     disp_extra = (
         df_disp
-        .groupby("Driver ID", as_index=False)[["AM", "SD"]]
+        .groupby("Driver ID", as_index=False)[["AM", "SD", "Total Disponibilidade"]]
         .sum()
     )
 
-    disp_extra["Total Disponibilidade"] = disp_extra["AM"] + disp_extra["SD"]
-
     # =====================================================
-    # CONSOLIDAÇÃO FINAL
+    # CONSOLIDAÇÃO
     # =====================================================
     df_final = (
         df_perf
@@ -113,8 +143,9 @@ if st.button("🚀 Gerar Dados"):
         )
     )
 
-    # Ajustar nome do motorista
-    df_final["Driver Name"] = df_final["Driver Name"].fillna(df_final["Driver Name_disp"])
+    df_final["Driver Name"] = df_final["Driver Name"].fillna(
+        df_final["Driver Name_disp"]
+    )
     df_final = df_final.drop(columns=["Driver Name_disp"])
 
     # =====================================================
@@ -124,55 +155,32 @@ if st.button("🚀 Gerar Dados"):
     for col in num_cols:
         df_final[col] = pd.to_numeric(df_final[col], errors="coerce").fillna(0).astype(int)
 
-    df_final["Driver ID"] = pd.to_numeric(
-        df_final["Driver ID"], errors="coerce"
-    ).fillna(0).astype(int)
 
-    # Taxa de Aproveitamento
     df_final["Taxa de Aproveitamento (%)"] = (
         df_final["Vezes que Carregou"] / df_final["Total Disponibilidade"]
     ).where(df_final["Total Disponibilidade"] > 0, 0) * 100
 
-    # DS
-    df_final["DS (%)"] = pd.to_numeric(df_final["DS"], errors="coerce").fillna(0) * 100
-
     # =====================================================
-    # ESTILO (SEM ERRO DE TYPE)
+    # TABELA
     # =====================================================
-    def color_percent(val):
-        try:
-            val = float(val)
-        except (TypeError, ValueError):
-            return ""
-
-        if val >= 98:
-            return "color: green; font-weight: bold;"
-        elif val >= 95:
-            return "color: orange; font-weight: bold;"
-        else:
-            return "color: red; font-weight: bold;"
-
-    styled_df = (
-        df_final.style
-        .applymap(
-            color_percent,
-            subset=["Taxa de Aproveitamento (%)", "DS (%)"]
-        )
-        .format({
-            "Taxa de Aproveitamento (%)": "{:.2f}%",
-            "DS (%)": "{:.2f}%"
-        })
+    st.dataframe(
+        df_final,
+        use_container_width=True,
+        height=600,
+        column_config={
+            "Taxa de Aproveitamento (%)": st.column_config.NumberColumn(
+                "Taxa de Aproveitamento (%)", format="%.2f%%"
+            )
+        }
     )
-
-    st.write(styled_df)
+    df_final = df_final.drop(columns=["DS", "DS (%)"], errors="ignore")
 
     # =====================================================
     # DOWNLOAD
     # =====================================================
-    csv = df_final.to_csv(index=False).encode("utf-8")
     st.download_button(
         "📥 Baixar Resultado",
-        data=csv,
+        data=df_final.to_csv(index=False).encode("utf-8"),
         file_name="resultado_consolidado.csv",
         mime="text/csv"
     )
