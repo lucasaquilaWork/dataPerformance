@@ -20,31 +20,17 @@ performance_files = st.file_uploader(
 )
 
 if st.button("🚀 Gerar Dados"):
+
     if not (carregamento_files and disponibilidade_files and performance_files):
-        st.warning("⚠️ Envie todos os arquivos antes de gerar os dados.")
+        st.warning("⚠️ Envie todos os arquivos.")
         st.stop()
 
     # =====================================================
     # LEITURA
     # =====================================================
-    try:
-        df_carregou = pd.concat(
-            [pd.read_csv(f) for f in carregamento_files],
-            ignore_index=True
-        )
-
-        df_disp = pd.concat(
-            [pd.read_excel(f) for f in disponibilidade_files],
-            ignore_index=True
-        )
-
-        df_perf = pd.concat(
-            [pd.read_excel(f) for f in performance_files],
-            ignore_index=True
-        )
-    except ImportError:
-        st.error("❌ Instale: pip install openpyxl")
-        st.stop()
+    df_carregou = pd.concat([pd.read_csv(f) for f in carregamento_files], ignore_index=True)
+    df_disp = pd.concat([pd.read_excel(f) for f in disponibilidade_files], ignore_index=True)
+    df_perf = pd.concat([pd.read_excel(f) for f in performance_files], ignore_index=True)
 
     # =====================================================
     # PADRONIZAÇÃO
@@ -52,9 +38,8 @@ if st.button("🚀 Gerar Dados"):
     for df in [df_carregou, df_disp, df_perf]:
         df.columns = df.columns.str.strip()
 
-    df_carregou["Driver ID"] = df_carregou["Driver ID"].astype(str).str.strip()
-    df_disp["Driver ID"] = df_disp["Driver ID"].astype(str).str.strip()
-    df_perf["Driver ID"] = df_perf["Driver ID"].astype(str).str.strip()
+    for df in [df_carregou, df_disp, df_perf]:
+        df["Driver ID"] = df["Driver ID"].astype(str).str.strip()
 
     df_perf = df_perf.rename(columns={
         "DRIVER ID": "Driver ID",
@@ -71,24 +56,12 @@ if st.button("🚀 Gerar Dados"):
         .dropna(subset=["Driver ID"])
         .groupby("Driver ID")["Task ID"]
         .nunique()
-        .reset_index()
-        .rename(columns={"Task ID": "Vezes que Carregou"})
+        .reset_index(name="Vezes que Carregou")
     )
 
-    # DEBUG
-    st.write("🔍 Motoristas carregamento:", df_carregou["Driver ID"].nunique())
-    st.write("🔍 Tasks únicas:", df_carregou["Task ID"].nunique())
-
     # =====================================================
-    # DISPONIBILIDADE
+    # DISPONIBILIDADE (🔥 CORRIGIDO DE VERDADE)
     # =====================================================
-    disp_count = (
-        df_disp
-        .groupby("Driver ID", as_index=False)["No Show Time"]
-        .sum()
-        .rename(columns={"No Show Time": "No-Show"})
-    )
-
     fixed_cols = ["Driver ID", "Driver Name", "No Show Time", "Vehicle Type"]
     date_cols = [c for c in df_disp.columns if c not in fixed_cols]
 
@@ -98,35 +71,53 @@ if st.button("🚀 Gerar Dados"):
         val = str(val).strip()
         if val in ["", "--", "Not Available"]:
             return None
+
         match = re.search(r"(\d{1,2}):(\d{2})", val)
         if not match:
             return None
-        hour = int(match.group(1))
-        return "AM" if hour < 12 else "SD"
 
-    df_disp["AM"] = df_disp[date_cols].apply(
-        lambda row: sum(classify_shift(v) == "AM" for v in row),
-        axis=1
+        return "AM" if int(match.group(1)) < 12 else "SD"
+
+    # 🔥 EXPLODIR dados (linha por dia/turno)
+    registros = []
+
+    for _, row in df_disp.iterrows():
+        for col in date_cols:
+            turno = classify_shift(row[col])
+            if turno:
+                registros.append({
+                    "Driver ID": row["Driver ID"],
+                    "Driver Name": row.get("Driver Name"),
+                    "Vehicle Type": row.get("Vehicle Type"),
+                    "Turno": turno
+                })
+
+    df_turnos = pd.DataFrame(registros)
+
+    # 🔥 AGRUPAMENTO CORRETO
+    disp_resumo = (
+        df_turnos
+        .groupby("Driver ID")
+        .agg(
+            AM=("Turno", lambda x: (x == "AM").sum()),
+            SD=("Turno", lambda x: (x == "SD").sum())
+        )
+        .reset_index()
     )
 
-    df_disp["SD"] = df_disp[date_cols].apply(
-        lambda row: sum(classify_shift(v) == "SD" for v in row),
-        axis=1
-    )
+    disp_resumo["Total Disponibilidade"] = disp_resumo["AM"] + disp_resumo["SD"]
 
-    df_disp["Total Disponibilidade"] = df_disp["AM"] + df_disp["SD"]
-
-    disp_extra = (
+    # 🔥 NO SHOW
+    disp_noshow = (
         df_disp
-        .groupby("Driver ID", as_index=False)[["AM", "SD", "Total Disponibilidade"]]
+        .groupby("Driver ID")["No Show Time"]
         .sum()
+        .reset_index(name="No-Show")
     )
 
-    # =====================================================
-    # 🚗 VEÍCULO (🔥 CORREÇÃO AQUI)
-    # =====================================================
-    veiculo_por_motorista = (
-        df_disp
+    # 🔥 VEÍCULO (agora confiável)
+    veiculo = (
+        df_turnos
         .dropna(subset=["Vehicle Type"])
         .groupby("Driver ID")["Vehicle Type"]
         .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])
@@ -139,27 +130,15 @@ if st.button("🚀 Gerar Dados"):
     df_final = (
         df_perf
         .merge(carregou_count, on="Driver ID", how="left")
-        .merge(disp_count, on="Driver ID", how="left")
-        .merge(disp_extra, on="Driver ID", how="left")
-        .merge(veiculo_por_motorista, on="Driver ID", how="left")
-        .merge(
-            df_disp[["Driver ID", "Driver Name"]].drop_duplicates(),
-            on="Driver ID",
-            how="left",
-            suffixes=("", "_disp")
-        )
+        .merge(disp_resumo, on="Driver ID", how="left")
+        .merge(disp_noshow, on="Driver ID", how="left")
+        .merge(veiculo, on="Driver ID", how="left")
     )
 
-    df_final["Driver Name"] = df_final["Driver Name"].fillna(
-        df_final["Driver Name_disp"]
-    )
-
-    df_final = df_final.drop(columns=["Driver Name_disp"])
-
     # =====================================================
-    # TRATATIVA
+    # TRATAMENTO
     # =====================================================
-    num_cols = ["Vezes que Carregou", "No-Show", "AM", "SD", "Total Disponibilidade"]
+    num_cols = ["Vezes que Carregou", "AM", "SD", "Total Disponibilidade", "No-Show"]
 
     for col in num_cols:
         df_final[col] = pd.to_numeric(df_final[col], errors="coerce").fillna(0)
@@ -182,7 +161,7 @@ if st.button("🚀 Gerar Dados"):
         )
 
     with col2:
-        veiculo = st.selectbox(
+        veiculo_filtro = st.selectbox(
             "Tipo de Veículo",
             ["Todos"] + sorted(df_final["Vehicle Type"].dropna().unique())
         )
@@ -195,42 +174,28 @@ if st.button("🚀 Gerar Dados"):
     if motorista != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Driver Name"] == motorista]
 
-    if veiculo != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["Vehicle Type"] == veiculo]
+    if veiculo_filtro != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Vehicle Type"] == veiculo_filtro]
 
-    df_filtrado = df_filtrado[
-        df_filtrado["Taxa de Aproveitamento (%)"] >= min_aprov
-    ]
+    df_filtrado = df_filtrado[df_filtrado["Taxa de Aproveitamento (%)"] >= min_aprov]
 
     # =====================================================
     # TABELA
     # =====================================================
-    st.dataframe(
-        df_filtrado,
-        use_container_width=True,
-        height=500,
-        column_config={
-            "Taxa de Aproveitamento (%)": st.column_config.NumberColumn(
-                format="%.2f%%"
-            )
-        }
-    )
+    st.dataframe(df_filtrado, use_container_width=True, height=500)
 
     # =====================================================
     # GRÁFICO
     # =====================================================
     top_n = st.slider("Qtd. piores motoristas", 5, 30, 10)
 
-    df_piores = df_filtrado.sort_values(
-        by="Taxa de Aproveitamento (%)"
-    ).head(top_n)
+    df_piores = df_filtrado.sort_values("Taxa de Aproveitamento (%)").head(top_n)
 
     fig = px.bar(
         df_piores,
         x="Driver Name",
         y="Taxa de Aproveitamento (%)",
-        color="Vehicle Type",
-        title="📉 Piores Motoristas"
+        color="Vehicle Type"
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -241,6 +206,5 @@ if st.button("🚀 Gerar Dados"):
     st.download_button(
         "📥 Baixar Resultado",
         data=df_filtrado.to_csv(index=False).encode("utf-8"),
-        file_name="resultado_consolidado.csv",
-        mime="text/csv"
+        file_name="resultado.csv"
     )
