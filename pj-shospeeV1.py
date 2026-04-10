@@ -60,69 +60,62 @@ if st.button("🚀 Gerar Dados"):
     )
 
     # =====================================================
-    # DISPONIBILIDADE (🔥 CORRIGIDO DE VERDADE)
-    # =====================================================
-    fixed_cols = ["Driver ID", "Driver Name", "No Show Time", "Vehicle Type"]
-    date_cols = [c for c in df_disp.columns if c not in fixed_cols]
+# DISPONIBILIDADE (🔥 VERSÃO ROBUSTA)
+# =====================================================
+fixed_cols = ["Driver ID", "Driver Name", "No Show Time", "Vehicle Type"]
+date_cols = [c for c in df_disp.columns if c not in fixed_cols]
 
-    def classify_shift(val):
-        if pd.isna(val):
-            return None
-        val = str(val).strip()
-        if val in ["", "--", "Not Available"]:
-            return None
+def classify_shift(val):
+    if pd.isna(val):
+        return None
 
-        match = re.search(r"(\d{1,2}):(\d{2})", val)
-        if not match:
-            return None
+    val = str(val).strip()
 
-        return "AM" if int(match.group(1)) < 12 else "SD"
+    if val in ["", "--", "Not Available"]:
+        return None
 
-    # 🔥 EXPLODIR dados (linha por dia/turno)
-    registros = []
+    match = re.search(r"(\d{1,2}):(\d{2})", val)
+    if not match:
+        return None
 
-    for _, row in df_disp.iterrows():
-        for col in date_cols:
-            turno = classify_shift(row[col])
-            if turno:
-                registros.append({
-                    "Driver ID": row["Driver ID"],
-                    "Driver Name": row.get("Driver Name"),
-                    "Vehicle Type": row.get("Vehicle Type"),
-                    "Turno": turno
-                })
+    hora = int(match.group(1))
+    return "AM" if hora < 12 else "SD"
 
-    df_turnos = pd.DataFrame(registros)
+# 🔥 CONTAGEM DIRETA (SEM EXPLODIR)
+df_disp["AM"] = df_disp[date_cols].apply(
+    lambda row: sum(1 for v in row if classify_shift(v) == "AM"),
+    axis=1
+)
 
-    # 🔥 AGRUPAMENTO CORRETO
-    disp_resumo = (
-        df_turnos
-        .groupby("Driver ID")
-        .agg(
-            AM=("Turno", lambda x: (x == "AM").sum()),
-            SD=("Turno", lambda x: (x == "SD").sum())
-        )
-        .reset_index()
-    )
+df_disp["SD"] = df_disp[date_cols].apply(
+    lambda row: sum(1 for v in row if classify_shift(v) == "SD"),
+    axis=1
+)
 
-    disp_resumo["Total Disponibilidade"] = disp_resumo["AM"] + disp_resumo["SD"]
+df_disp["Total Disponibilidade"] = df_disp["AM"] + df_disp["SD"]
 
-    # 🔥 NO SHOW
-    disp_noshow = (
-        df_disp
-        .groupby("Driver ID")["No Show Time"]
-        .sum()
-        .reset_index(name="No-Show")
-    )
+# 🔥 AGRUPAR CERTO
+disp_resumo = (
+    df_disp
+    .groupby("Driver ID", as_index=False)[["AM", "SD", "Total Disponibilidade"]]
+    .sum()
+)
 
-    # 🔥 VEÍCULO (agora confiável)
-    veiculo = (
-        df_turnos
-        .dropna(subset=["Vehicle Type"])
-        .groupby("Driver ID")["Vehicle Type"]
-        .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])
-        .reset_index()
-    )
+# 🔥 NO SHOW
+disp_noshow = (
+    df_disp
+    .groupby("Driver ID", as_index=False)["No Show Time"]
+    .sum()
+    .rename(columns={"No Show Time": "No-Show"})
+)
+
+# 🔥 VEÍCULO (MAIS CONFIÁVEL)
+veiculo = (
+    df_disp
+    .dropna(subset=["Vehicle Type"])
+    .groupby("Driver ID", as_index=False)["Vehicle Type"]
+    .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])
+)
 
     # =====================================================
     # CONSOLIDAÇÃO
@@ -134,7 +127,6 @@ if st.button("🚀 Gerar Dados"):
         .merge(disp_noshow, on="Driver ID", how="left")
         .merge(veiculo, on="Driver ID", how="left")
     )
-
     # =====================================================
     # TRATAMENTO
     # =====================================================
