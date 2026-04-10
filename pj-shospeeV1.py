@@ -47,12 +47,11 @@ if st.button("🚀 Gerar Dados"):
         st.stop()
 
     # =====================================================
-    # PADRONIZAÇÃO (🔥 MUITO IMPORTANTE)
+    # PADRONIZAÇÃO
     # =====================================================
     for df in [df_carregou, df_disp, df_perf]:
         df.columns = df.columns.str.strip()
 
-    # padronizar ID como string
     df_carregou["Driver ID"] = df_carregou["Driver ID"].astype(str).str.strip()
     df_disp["Driver ID"] = df_disp["Driver ID"].astype(str).str.strip()
     df_perf["Driver ID"] = df_perf["Driver ID"].astype(str).str.strip()
@@ -65,7 +64,7 @@ if st.button("🚀 Gerar Dados"):
     df_perf = df_perf[["Driver ID", "Driver Name", "DS"]]
 
     # =====================================================
-    # CARREGAMENTO (🔥 CORRIGIDO)
+    # CARREGAMENTO
     # =====================================================
     carregou_count = (
         df_carregou
@@ -124,6 +123,17 @@ if st.button("🚀 Gerar Dados"):
     )
 
     # =====================================================
+    # 🚗 VEÍCULO (🔥 CORREÇÃO AQUI)
+    # =====================================================
+    veiculo_por_motorista = (
+        df_disp
+        .dropna(subset=["Vehicle Type"])
+        .groupby("Driver ID")["Vehicle Type"]
+        .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])
+        .reset_index()
+    )
+
+    # =====================================================
     # CONSOLIDAÇÃO
     # =====================================================
     df_final = (
@@ -131,8 +141,9 @@ if st.button("🚀 Gerar Dados"):
         .merge(carregou_count, on="Driver ID", how="left")
         .merge(disp_count, on="Driver ID", how="left")
         .merge(disp_extra, on="Driver ID", how="left")
+        .merge(veiculo_por_motorista, on="Driver ID", how="left")
         .merge(
-            df_disp[["Driver ID", "Driver Name", "Vehicle Type"]].drop_duplicates(),
+            df_disp[["Driver ID", "Driver Name"]].drop_duplicates(),
             on="Driver ID",
             how="left",
             suffixes=("", "_disp")
@@ -158,7 +169,7 @@ if st.button("🚀 Gerar Dados"):
     ).where(df_final["Total Disponibilidade"] > 0, 0) * 100
 
     # =====================================================
-    # 🎯 FILTROS
+    # FILTROS
     # =====================================================
     st.subheader("🎯 Filtros")
 
@@ -192,7 +203,7 @@ if st.button("🚀 Gerar Dados"):
     ]
 
     # =====================================================
-    # 📊 TABELA
+    # TABELA
     # =====================================================
     st.dataframe(
         df_filtrado,
@@ -206,7 +217,7 @@ if st.button("🚀 Gerar Dados"):
     )
 
     # =====================================================
-    # 📉 GRÁFICO PIORES
+    # GRÁFICO
     # =====================================================
     top_n = st.slider("Qtd. piores motoristas", 5, 30, 10)
 
