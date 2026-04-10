@@ -62,60 +62,60 @@ if st.button("🚀 Gerar Dados"):
     # =====================================================
 # DISPONIBILIDADE (🔥 VERSÃO ROBUSTA)
 # =====================================================
-fixed_cols = ["Driver ID", "Driver Name", "No Show Time", "Vehicle Type"]
-date_cols = [c for c in df_disp.columns if c not in fixed_cols]
-
-def classify_shift(val):
-    if pd.isna(val):
-        return None
-
-    val = str(val).strip()
-
-    if val in ["", "--", "Not Available"]:
-        return None
-
-    match = re.search(r"(\d{1,2}):(\d{2})", val)
-    if not match:
-        return None
-
-    hora = int(match.group(1))
-    return "AM" if hora < 12 else "SD"
-
-# 🔥 CONTAGEM DIRETA (SEM EXPLODIR)
-df_disp["AM"] = df_disp[date_cols].apply(
-    lambda row: sum(1 for v in row if classify_shift(v) == "AM"),
-    axis=1
-)
-
-df_disp["SD"] = df_disp[date_cols].apply(
-    lambda row: sum(1 for v in row if classify_shift(v) == "SD"),
-    axis=1
-)
-
-df_disp["Total Disponibilidade"] = df_disp["AM"] + df_disp["SD"]
-
-# 🔥 AGRUPAR CERTO
-disp_resumo = (
-    df_disp
-    .groupby("Driver ID", as_index=False)[["AM", "SD", "Total Disponibilidade"]]
-    .sum()
-)
-
-# 🔥 NO SHOW
-disp_noshow = (
-    df_disp
-    .groupby("Driver ID", as_index=False)["No Show Time"]
-    .sum()
-    .rename(columns={"No Show Time": "No-Show"})
-)
-
-# 🔥 VEÍCULO (MAIS CONFIÁVEL)
-veiculo = (
-    df_disp
-    .dropna(subset=["Vehicle Type"])
-    .groupby("Driver ID", as_index=False)["Vehicle Type"]
-    .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])
-)
+    fixed_cols = ["Driver ID", "Driver Name", "No Show Time", "Vehicle Type"]
+    date_cols = [c for c in df_disp.columns if c not in fixed_cols]
+    
+    def classify_shift(val):
+        if pd.isna(val):
+            return None
+    
+        val = str(val).strip()
+    
+        if val in ["", "--", "Not Available"]:
+            return None
+    
+        match = re.search(r"(\d{1,2}):(\d{2})", val)
+        if not match:
+            return None
+    
+        hora = int(match.group(1))
+        return "AM" if hora < 12 else "SD"
+    
+    # 🔥 CONTAGEM DIRETA (SEM EXPLODIR)
+    df_disp["AM"] = df_disp[date_cols].apply(
+        lambda row: sum(1 for v in row if classify_shift(v) == "AM"),
+        axis=1
+    )
+    
+    df_disp["SD"] = df_disp[date_cols].apply(
+        lambda row: sum(1 for v in row if classify_shift(v) == "SD"),
+        axis=1
+    )
+    
+    df_disp["Total Disponibilidade"] = df_disp["AM"] + df_disp["SD"]
+    
+    # 🔥 AGRUPAR CERTO
+    disp_resumo = (
+        df_disp
+        .groupby("Driver ID", as_index=False)[["AM", "SD", "Total Disponibilidade"]]
+        .sum()
+    )
+    
+    # 🔥 NO SHOW
+    disp_noshow = (
+        df_disp
+        .groupby("Driver ID", as_index=False)["No Show Time"]
+        .sum()
+        .rename(columns={"No Show Time": "No-Show"})
+    )
+    
+    # 🔥 VEÍCULO (MAIS CONFIÁVEL)
+    veiculo = (
+        df_disp
+        .dropna(subset=["Vehicle Type"])
+        .groupby("Driver ID", as_index=False)["Vehicle Type"]
+        .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])
+    )
 
     # =====================================================
     # CONSOLIDAÇÃO
