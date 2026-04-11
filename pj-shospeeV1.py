@@ -163,8 +163,20 @@ if st.button("🚀 Gerar Dados"):
     # =====================================================
     # TABELA
     # =====================================================
+    st.subheader("🎯 Filtro")
+    
+    veiculo_filtro = st.selectbox(
+        "Filtrar por Tipo de Veículo",
+        ["Todos"] + sorted(df_final["Vehicle Type"].dropna().unique())
+    )
+    
+    df_filtrado = df_final.copy()
+    
+    if veiculo_filtro != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Vehicle Type"] == veiculo_filtro]
+        
     st.dataframe(
-        df_final,
+        df_filtrado,
         use_container_width=True,
         height=600,
         column_config={
@@ -180,7 +192,7 @@ if st.button("🚀 Gerar Dados"):
     # =====================================================
     st.download_button(
         "📥 Baixar Resultado",
-        data=df_final.to_csv(index=False).encode("utf-8"),
+        data=df_filtrado.to_csv(index=False).encode("utf-8"),
         file_name="resultado_consolidado.csv",
         mime="text/csv"
     )
